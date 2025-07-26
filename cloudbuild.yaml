@@ -9,11 +9,9 @@ steps:
         if [[ "$BRANCH_NAME" == "feature/cws-7-configure-fix" ]]; then
           # Get the latest version number from the registry
           echo "=== DEBUG: Running gcloud command ==="
-          echo "Command: gcloud artifacts docker images list us-docker.pkg.dev/prj-prd-cnb-workload/ar-workload-airflow-nonprod/airflow --format=\"value(tags)\" --sort-by=~create_time"
+          echo "Command: gcloud artifacts docker images list us-docker.pkg.dev/prj-prd-cnb-workload/ar-workload-airflow-nonprod --include-tags --format=\"get(tags)\""
           
-          ALL_TAGS=$$(gcloud artifacts docker images list us-docker.pkg.dev/prj-prd-cnb-workload/ar-workload-airflow-nonprod/airflow \
-            --format="value(tags)" \
-            --sort-by=~create_time)
+          ALL_TAGS=$$(gcloud artifacts docker images list us-docker.pkg.dev/prj-prd-cnb-workload/ar-workload-airflow-nonprod --include-tags --format="get(tags)")
           
           echo "=== DEBUG: gcloud command exit code ==="
           echo "Exit code: $$?"
@@ -25,7 +23,7 @@ steps:
           
           # Try alternative approach to list images
           echo "=== DEBUG: Alternative gcloud command (no format) ==="
-          gcloud artifacts docker images list us-docker.pkg.dev/prj-prd-cnb-workload/ar-workload-airflow-nonprod/airflow
+          gcloud artifacts docker images list us-docker.pkg.dev/prj-prd-cnb-workload/ar-workload-airflow-nonprod --include-tags
           echo "=== END DEBUG: Alternative command ==="
           
           REGISTRY_VERSION=$$(echo "$$ALL_TAGS" | grep '3\.0\.2-cnb-v[0-9]*' | head -1)
