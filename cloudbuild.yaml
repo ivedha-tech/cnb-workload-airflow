@@ -12,14 +12,31 @@ steps:
             --format="value(tags)" \
             --sort-by=~create_time)
           
+          echo "=== DEBUG: All tags from registry ==="
+          echo "$$ALL_TAGS"
+          echo "=== END DEBUG: All tags ==="
+          
           REGISTRY_VERSION=$$(echo "$$ALL_TAGS" | grep '3\.0\.2-cnb-v[0-9]*' | head -1)
+          
+          echo "=== DEBUG: Found matching version ==="
+          echo "REGISTRY_VERSION: $$REGISTRY_VERSION"
+          echo "=== END DEBUG: Found matching version ==="
           
           if [[ -z "$$REGISTRY_VERSION" ]]; then
             NEW_VERSION="3.0.2-cnb-v1"
+            echo "=== DEBUG: No matching version found, using v1 ==="
           else
             VERSION_NUM=$$(echo "$$REGISTRY_VERSION" | grep -o '[0-9]*$$')
+            echo "=== DEBUG: Version extraction ==="
+            echo "REGISTRY_VERSION: $$REGISTRY_VERSION"
+            echo "VERSION_NUM: $$VERSION_NUM"
+            echo "=== END DEBUG: Version extraction ==="
             NEW_VERSION_NUM=$$((VERSION_NUM + 1))
             NEW_VERSION="3.0.2-cnb-v$$NEW_VERSION_NUM"
+            echo "=== DEBUG: New version calculation ==="
+            echo "NEW_VERSION_NUM: $$NEW_VERSION_NUM"
+            echo "NEW_VERSION: $$NEW_VERSION"
+            echo "=== END DEBUG: New version calculation ==="
           fi
         else
           NEW_VERSION="$SHORT_SHA"
