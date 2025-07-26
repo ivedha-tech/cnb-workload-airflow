@@ -6,7 +6,7 @@ steps:
     args:
       - "-c"
       - |
-        if [[ "$$BRANCH_NAME" == "main" ]]; then
+        if [[ "$BRANCH_NAME" == "feature/cws-7-configure-fix" ]]; then
           # Get the latest version number from the registry
           ALL_TAGS=$$(gcloud artifacts docker images list us-docker.pkg.dev/prj-prd-cnb-workload/ar-workload-airflow-nonprod/airflow \
             --format="value(tags)" \
