@@ -11,7 +11,7 @@ steps:
           echo "🔍 Fetching existing tags from Artifact Registry..."
           ALL_TAGS=$$(gcloud artifacts docker images list us-docker.pkg.dev/prj-prd-cnb-workload/ar-workload-airflow-nonprod --include-tags --format="get(tags)")
           
-          REGISTRY_VERSION=$$(echo "$$ALL_TAGS" | grep '3\.0\.2-cnb-v[0-9]*' | head -1)
+          REGISTRY_VERSION=$$(echo "$$ALL_TAGS" | grep '3\.0\.2-cnb-v[0-9]*' | sort -V | tail -1)
           
           if [[ -z "$$REGISTRY_VERSION" ]]; then
             NEW_VERSION="3.0.2-cnb-v1"
