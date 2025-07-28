@@ -6,36 +6,42 @@ steps:
     args:
       - "-c"
       - |
-        if [[ "$$BRANCH_NAME" == "main" ]]; then
+        if [[ "$BRANCH_NAME" == "main" ]]; then
           # Get the latest version number from the registry
-          ALL_TAGS=$$(gcloud artifacts docker images list us-docker.pkg.dev/prj-prd-cnb-workload/ar-workload-airflow-nonprod/airflow \
-            --format="value(tags)" \
-            --sort-by=~create_time)
+          echo "🔍 Fetching existing tags from Artifact Registry..."
+          ALL_TAGS=$$(gcloud artifacts docker images list us-docker.pkg.dev/prj-prd-cnb-workload/ar-workload-airflow-nonprod --include-tags --format="get(tags)")
           
-          REGISTRY_VERSION=$$(echo "$$ALL_TAGS" | grep '3\.0\.2-cnb-v[0-9]*' | head -1)
+          REGISTRY_VERSION=$$(echo "$$ALL_TAGS" | grep '3\.0\.2-cnb-v[0-9]*' | sort -V | tail -1)
           
           if [[ -z "$$REGISTRY_VERSION" ]]; then
             NEW_VERSION="3.0.2-cnb-v1"
+            echo "📝 No existing version found, starting with v1"
           else
             VERSION_NUM=$$(echo "$$REGISTRY_VERSION" | grep -o '[0-9]*$$')
             NEW_VERSION_NUM=$$((VERSION_NUM + 1))
             NEW_VERSION="3.0.2-cnb-v$$NEW_VERSION_NUM"
+            echo "📈 Incrementing version from $$REGISTRY_VERSION to $$NEW_VERSION"
           fi
         else
           NEW_VERSION="$SHORT_SHA"
         fi
         
         # Get unique authors from recent commits (last 50 commits)
+        echo "👥 Extracting commit authors..."
         AUTHORS=$$(git log --pretty=format:"%an <%ae>" -50 | sort -u | tr '\n' ',' | sed 's/,$$//')
         
         # If no authors found, use default
         if [[ -z "$$AUTHORS" ]]; then
           AUTHORS="dev@ivedha.com"
+          echo "⚠️  No authors found, using default"
+        else
+          echo "✅ Found authors: $$AUTHORS"
         fi
         
         # Write to a temporary file for next steps
         echo "$$NEW_VERSION" > /workspace/version.txt
         echo "$$AUTHORS" > /workspace/authors.txt
+        echo "💾 Version and authors saved for next steps"
 
   # Build the Docker image with proper tagging and custom labels
   - name: "gcr.io/cloud-builders/docker"
@@ -45,20 +51,28 @@ steps:
       - "-c"
       - |
         # Read the version and authors from temporary files
+        echo "📖 Reading version and authors from previous step..."
         NEW_VERSION=$$(cat /workspace/version.txt)
         AUTHORS=$$(cat /workspace/authors.txt)
         
         # Fallback if variables are empty
         if [[ -z "$$NEW_VERSION" ]]; then
           NEW_VERSION="$SHORT_SHA"
+          echo "⚠️  Version not found, using commit SHA: $$NEW_VERSION"
+        else
+          echo "✅ Using version: $$NEW_VERSION"
         fi
         
         if [[ -z "$$AUTHORS" ]]; then
           AUTHORS="dev@ivedha.com"
+          echo "⚠️  Authors not found, using default"
+        else
+          echo "✅ Using authors: $$AUTHORS"
         fi
         
         # Enable BuildKit for heredoc syntax support
         export DOCKER_BUILDKIT=1
+        echo "🔨 Starting Docker build with BuildKit..."
         
         docker build \
           --build-arg AIRFLOW_VERSION=3.0.2 \
@@ -92,7 +106,10 @@ steps:
       - "-c"
       - |
         NEW_VERSION=$$(cat /workspace/version.txt)
+        echo "🚀 Pushing Docker image to Artifact Registry..."
+        echo "📦 Image: us-docker.pkg.dev/prj-prd-cnb-workload/ar-workload-airflow-nonprod/airflow:$$NEW_VERSION"
         docker push "us-docker.pkg.dev/prj-prd-cnb-workload/ar-workload-airflow-nonprod/airflow:$$NEW_VERSION"
+        echo "✅ Image pushed successfully!"
         
 # Set timeout for the build (in seconds)
 timeout: "3600s"
