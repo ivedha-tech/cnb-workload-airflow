@@ -82,7 +82,7 @@ def notify_servicenex_installation():
 
     payload = {
         "installationId": config['installation_id'],
-        "serviceCode": os.environ.get('SERVICE_CODE', 'CMG'),
+        "serviceCode": os.environ.get('SERVICE_CODE', 'Airflow'),
         "version": get_airflow_version(),
         "hostname": socket.gethostname(),
         "environment": config['environment'],
