@@ -98,14 +98,8 @@ def notify_servicenex_installation():
     }
 
     # Safe logging (no sensitive data)
-    debug = os.getenv("SERVICENEX_DEBUG", "false").lower() == "true"
     print("[ServiceNex] Sending installation notification...")
 
-    if debug:
-        from urllib.parse import urlparse
-        masked = urlparse(config['endpoint']).netloc
-        print(f"[ServiceNex][DEBUG] Endpoint host: {masked}")
-        print(f"[ServiceNex][DEBUG] Payload keys: {list(payload.keys())}")
 
     try:
         response = requests.post(
@@ -119,20 +113,15 @@ def notify_servicenex_installation():
         )
 
         if response.status_code in [200, 201]:
-            print(f"[ServiceNex] ✓ Installation reported successfully (status: {response.status_code})")
-            if debug:
-                print(f"[ServiceNex][DEBUG] Response length: {len(response.text or '')}")
+            print(f"[ServiceNex] ✓ Installation notification succeeded (status: {response.status_code})")
             return True
         else:
-            print(f"[ServiceNex] ✗ Failed to report (status: {response.status_code})")
-            if debug:
-                print(f"[ServiceNex][DEBUG] Response length: {len(response.text or '')}")
+            print(f"[ServiceNex] ✗ Installation notification failed (status: {response.status_code})")
             return False
 
+
     except Exception:
-        print("[ServiceNex] ✗ Error during notification (details hidden)")
-        if debug:
-            import traceback; traceback.print_exc()
+        print("[ServiceNex] ✗ Installation notification error")
         return False
 
 
