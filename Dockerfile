@@ -1847,5 +1847,14 @@ LABEL org.apache.airflow.distro="debian" \
   org.opencontainers.image.title="Production Airflow Image" \
   org.opencontainers.image.description="Reference, production-ready Apache Airflow image"
 
-ENTRYPOINT ["/usr/bin/dumb-init", "--", "/entrypoint"]
+#ENTRYPOINT ["/usr/bin/dumb-init", "--", "/entrypoint"]
+#CMD []
+
+# --- ServiceNow wrapper + script  ---
+COPY --chown=airflow:0 scripts/servicenex/servicenex_notifier.py /opt/airflow/scripts/servicenex_notifier.py
+COPY --chown=airflow:0 scripts/servicenex/release_info.json /opt/airflow/scripts/release_info.json
+COPY --chown=airflow:0 scripts/servicenex/servicenex-entrypoint.sh /usr/local/bin/servicenex-entrypoint.sh
+RUN chmod +x /usr/local/bin/servicenex-entrypoint.sh /opt/airflow/scripts/servicenex_notifier.py
+
+ENTRYPOINT ["servicenex-entrypoint.sh"]
 CMD []
