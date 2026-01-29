@@ -12,10 +12,12 @@ import os
 import json
 import socket
 import requests
+import urllib3
 from datetime import datetime
 from pathlib import Path
 
-
+# Suppress warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def read_secret(var_env: str, var_file_env: str):
@@ -82,7 +84,7 @@ def notify_servicenex_installation():
 
     payload = {
         "installationId": config['installation_id'],
-        "serviceCode": os.environ.get('SERVICE_CODE', 'Airflow'),
+        "serviceCode": os.environ.get('SERVICE_CODE', 'CMG'),
         "version": get_airflow_version(),
         "hostname": socket.gethostname(),
         "environment": config['environment'],
@@ -97,7 +99,8 @@ def notify_servicenex_installation():
         "dependencies": release_info.get("dependencies", [])
     }
 
-    # Safe logging (no sensitive data)
+
+
     print("[ServiceNex] Sending installation notification...")
 
 
@@ -109,7 +112,8 @@ def notify_servicenex_installation():
                 'Content-Type': 'application/json'
             },
             json=payload,
-            timeout=30
+            timeout=30,
+            verify=False
         )
 
         if response.status_code in [200, 201]:
@@ -123,6 +127,7 @@ def notify_servicenex_installation():
     except Exception:
         print("[ServiceNex] ✗ Installation notification error")
         return False
+
 
 
 if __name__ == "__main__":
