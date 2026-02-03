@@ -39,7 +39,7 @@ def get_airflow_version():
         from airflow import __version__
         return __version__
     except ImportError:
-        return os.environ.get('AIRFLOW_VERSION', '3.0.2')
+        return os.environ.get('AIRFLOW_VERSION', '3.1.0')
 
 
 
@@ -90,7 +90,7 @@ def notify_servicenex_installation():
         "environment": config['environment'],
         "deployedAt": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
         "releaseType": os.environ.get('RELEASE_TYPE', 'minor'),
-        "downloadUrl": config['download_url'] or 'https://airflow.apache.org/docs/apache-airflow/3.0.2/',
+        "downloadUrl": config['download_url'] or 'https://airflow.apache.org/docs/apache-airflow/3.1.0/',
         "documentationUrl": os.environ.get('DOCUMENTATION_URL', 'https://airflow.apache.org/docs/'),
         "summary": f"Airflow {get_airflow_version()} installation detected on {socket.gethostname()}",
         "details": f"Airflow installation completed. Airflow initialized at {datetime.utcnow().replace(microsecond=0).isoformat()}",
