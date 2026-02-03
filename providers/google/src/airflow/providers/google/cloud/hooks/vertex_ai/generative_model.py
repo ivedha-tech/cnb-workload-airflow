@@ -32,6 +32,8 @@ from vertexai.preview.caching import CachedContent
 from vertexai.preview.evaluation import EvalResult, EvalTask
 from vertexai.preview.tuning import sft
 
+from airflow.exceptions import AirflowProviderDeprecationWarning
+from airflow.providers.google.common.deprecated import deprecated
 from airflow.providers.google.common.hooks.base_google import PROVIDE_PROJECT_ID, GoogleBaseHook
 
 if TYPE_CHECKING:
@@ -348,6 +350,9 @@ class GenerativeModelHook(GoogleBaseHook):
         :param generation_config: Optional. Generation configuration settings.
         :param safety_settings: Optional. Per request settings for blocking unsafe content.
         """
+        # During run of the system test it was found out that names from xcom, e.g. 3402922389 can be
+        # treated as int and throw an error TypeError: expected string or bytes-like object, got 'int'
+        cached_content_name = str(cached_content_name)
         vertexai.init(project=project_id, location=location, credentials=self.get_credentials())
 
         cached_context_model = self.get_cached_context_model(cached_content_name=cached_content_name)
@@ -361,6 +366,11 @@ class GenerativeModelHook(GoogleBaseHook):
         return response.text
 
 
+@deprecated(
+    planned_removal_date="January 3, 2026",
+    use_instead="airflow.providers.google.cloud.hooks.vertex_ai.experiment_service.ExperimentRunHook",
+    category=AirflowProviderDeprecationWarning,
+)
 class ExperimentRunHook(GoogleBaseHook):
     """Use the Vertex AI SDK for Python to create and manage your experiment runs."""
 

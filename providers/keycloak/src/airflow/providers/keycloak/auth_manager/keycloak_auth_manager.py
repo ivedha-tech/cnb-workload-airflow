@@ -16,9 +16,10 @@
 # under the License.
 from __future__ import annotations
 
+import argparse
 import json
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urljoin
 
 import requests
@@ -27,8 +28,14 @@ from keycloak import KeycloakOpenID
 
 from airflow.api_fastapi.app import AUTH_MANAGER_FASTAPI_APP_PREFIX
 from airflow.api_fastapi.auth.managers.base_auth_manager import BaseAuthManager
+
+try:
+    from airflow.api_fastapi.auth.managers.base_auth_manager import ExtendedResourceMethod
+except ImportError:
+    from airflow.api_fastapi.auth.managers.base_auth_manager import ResourceMethod as ExtendedResourceMethod
+
 from airflow.api_fastapi.common.types import MenuItem
-from airflow.cli.cli_config import CLICommand, GroupCommand
+from airflow.cli.cli_config import CLICommand, DefaultHelpParser, GroupCommand
 from airflow.configuration import conf
 from airflow.exceptions import AirflowException
 from airflow.providers.keycloak.auth_manager.cli.definition import KEYCLOAK_AUTH_MANAGER_COMMANDS
@@ -63,6 +70,17 @@ log = logging.getLogger(__name__)
 RESOURCE_ID_ATTRIBUTE_NAME = "resource_id"
 
 
+def get_parser() -> argparse.ArgumentParser:
+    """Generate documentation; used by Sphinx argparse."""
+    from airflow.cli.cli_parser import AirflowHelpFormatter, _add_command
+
+    parser = DefaultHelpParser(prog="airflow", formatter_class=AirflowHelpFormatter)
+    subparsers = parser.add_subparsers(dest="subcommand", metavar="GROUP_OR_COMMAND")
+    for group_command in KeycloakAuthManager.get_cli_commands():
+        _add_command(subparsers, group_command)
+    return parser
+
+
 class KeycloakAuthManager(BaseAuthManager[KeycloakAuthManagerUser]):
     """
     Keycloak auth manager.
@@ -89,6 +107,10 @@ class KeycloakAuthManager(BaseAuthManager[KeycloakAuthManagerUser]):
     def get_url_login(self, **kwargs) -> str:
         base_url = conf.get("api", "base_url", fallback="/")
         return urljoin(base_url, f"{AUTH_MANAGER_FASTAPI_APP_PREFIX}/login")
+
+    def get_url_refresh(self) -> str | None:
+        base_url = conf.get("api", "base_url", fallback="/")
+        return urljoin(base_url, f"{AUTH_MANAGER_FASTAPI_APP_PREFIX}/refresh")
 
     def is_authorized_configuration(
         self,
@@ -201,7 +223,7 @@ class KeycloakAuthManager(BaseAuthManager[KeycloakAuthManagerUser]):
         self, menu_items: list[MenuItem], *, user: KeycloakAuthManagerUser
     ) -> list[MenuItem]:
         authorized_menus = self._is_batch_authorized(
-            permissions=[(cast("ResourceMethod", "MENU"), menu_item.value) for menu_item in menu_items],
+            permissions=[("MENU", menu_item.value) for menu_item in menu_items],
             user=user,
         )
         return [MenuItem(menu[1]) for menu in authorized_menus]
@@ -264,6 +286,8 @@ class KeycloakAuthManager(BaseAuthManager[KeycloakAuthManagerUser]):
         context_attributes = prune_dict(attributes or {})
         if resource_id:
             context_attributes[RESOURCE_ID_ATTRIBUTE_NAME] = resource_id
+        elif method == "GET":
+            method = "LIST"
 
         resp = requests.post(
             self._get_token_url(server_url, realm),
@@ -285,9 +309,9 @@ class KeycloakAuthManager(BaseAuthManager[KeycloakAuthManagerUser]):
     def _is_batch_authorized(
         self,
         *,
-        permissions: list[tuple[ResourceMethod, str]],
+        permissions: list[tuple[ExtendedResourceMethod, str]],
         user: KeycloakAuthManagerUser,
-    ) -> set[tuple[ResourceMethod, str]]:
+    ) -> set[tuple[ExtendedResourceMethod, str]]:
         client_id = conf.get(CONF_SECTION_NAME, CONF_CLIENT_ID_KEY)
         realm = conf.get(CONF_SECTION_NAME, CONF_REALM_KEY)
         server_url = conf.get(CONF_SECTION_NAME, CONF_SERVER_URL_KEY)
@@ -326,7 +350,7 @@ class KeycloakAuthManager(BaseAuthManager[KeycloakAuthManagerUser]):
         return payload
 
     @staticmethod
-    def _get_batch_payload(client_id: str, permissions: list[tuple[ResourceMethod, str]]):
+    def _get_batch_payload(client_id: str, permissions: list[tuple[ExtendedResourceMethod, str]]):
         payload: dict[str, Any] = {
             "grant_type": "urn:ietf:params:oauth:grant-type:uma-ticket",
             "audience": client_id,

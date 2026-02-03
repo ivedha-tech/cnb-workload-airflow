@@ -28,6 +28,7 @@ from uuid import uuid4
 
 import pendulum
 import pytest
+import pytest_asyncio
 import yaml
 from kubernetes.client import models as k8s
 
@@ -45,8 +46,8 @@ from tests_common.test_utils.version_compat import AIRFLOW_V_3_0_PLUS
 POD_MANAGER_CLASS = "airflow.providers.cncf.kubernetes.utils.pod_manager.PodManager"
 
 
-@pytest.fixture(autouse=True, scope="module")
-def patch_pod_manager_methods():
+@pytest_asyncio.fixture(autouse=True, scope="function")
+async def patch_pod_manager_methods():
     # Patch watch_pod_events
     patch_watch_pod_events = mock.patch(f"{POD_MANAGER_CLASS}.watch_pod_events", new_callable=mock.AsyncMock)
     mock_watch_pod_events = patch_watch_pod_events.start()
@@ -211,7 +212,12 @@ def create_context(task):
             execution_date=logical_date,
             run_id=DagRun.generate_run_id(DagRunType.MANUAL, logical_date),
         )
-    task_instance = TaskInstance(task=task)
+    if AIRFLOW_V_3_0_PLUS:
+        from uuid6 import uuid7
+
+        task_instance = TaskInstance(task=task, dag_version_id=uuid7())
+    else:
+        task_instance = TaskInstance(task=task)
     task_instance.dag_run = dag_run
     task_instance.dag_id = dag.dag_id
     task_instance.xcom_push = mock.Mock()
@@ -723,6 +729,8 @@ class TestSparkKubernetesOperator:
             pod=op.pod,
             containers="spark-kubernetes-driver",
             follow_logs=True,
+            container_name_log_prefix_enabled=True,
+            log_formatter=None,
         )
 
     @pytest.mark.asyncio

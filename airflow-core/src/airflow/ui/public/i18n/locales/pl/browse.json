@@ -10,11 +10,14 @@
       "user": "Użytkownik",
       "when": "Kiedy"
     },
+    "filters": {
+      "eventType": "Typ zdarzenia"
+    },
     "title": "Dziennik audytu"
   },
   "xcom": {
     "columns": {
-      "dag": "DAG",
+      "dag": "Dag",
       "key": "Klucz",
       "value": "Wartość"
     },

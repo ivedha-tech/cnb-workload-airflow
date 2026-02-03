@@ -24,12 +24,13 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from google.api_core import exceptions
 
-from airflow.exceptions import AirflowException
+from airflow.exceptions import AirflowException, AirflowProviderDeprecationWarning
 from airflow.providers.google.cloud.hooks.vertex_ai.generative_model import (
     ExperimentRunHook,
     GenerativeModelHook,
 )
 from airflow.providers.google.cloud.operators.cloud_base import GoogleCloudBaseOperator
+from airflow.providers.google.common.deprecated import deprecated
 
 if TYPE_CHECKING:
     from airflow.utils.context import Context
@@ -57,7 +58,7 @@ class TextEmbeddingModelGetEmbeddingsOperator(GoogleCloudBaseOperator):
         account from the list granting this role to the originating account (templated).
     """
 
-    template_fields = ("location", "project_id", "impersonation_chain", "prompt")
+    template_fields = ("location", "project_id", "impersonation_chain", "prompt", "pretrained_model")
 
     def __init__(
         self,
@@ -210,7 +211,14 @@ class SupervisedFineTuningTrainOperator(GoogleCloudBaseOperator):
         account from the list granting this role to the originating account (templated).
     """
 
-    template_fields = ("location", "project_id", "impersonation_chain", "train_dataset", "validation_dataset")
+    template_fields = (
+        "location",
+        "project_id",
+        "impersonation_chain",
+        "train_dataset",
+        "validation_dataset",
+        "source_model",
+    )
 
     def __init__(
         self,
@@ -587,6 +595,11 @@ class GenerateFromCachedContentOperator(GoogleCloudBaseOperator):
         return cached_content_text
 
 
+@deprecated(
+    planned_removal_date="January 3, 2026",
+    use_instead="airflow.providers.google.cloud.operators.vertex_ai.experiment_service.DeleteExperimentRunOperator",
+    category=AirflowProviderDeprecationWarning,
+)
 class DeleteExperimentRunOperator(GoogleCloudBaseOperator):
     """
     Use the Rapid Evaluation API to evaluate a model.

@@ -24,14 +24,16 @@ import subprocess
 import time
 
 import pytest
+from sqlalchemy import select
 
+from airflow._shared.timezones import timezone
 from airflow.dag_processing.bundles.manager import DagBundlesManager
 from airflow.executors import executor_loader
 from airflow.executors.executor_utils import ExecutorName
 from airflow.models import DAG, DagBag, DagRun
 from airflow.models.serialized_dag import SerializedDagModel
 from airflow.models.taskinstance import TaskInstance
-from airflow.utils import timezone
+from airflow.serialization.serialized_objects import SerializedDAG
 from airflow.utils.session import create_session
 from airflow.utils.span_status import SpanStatus
 from airflow.utils.state import State
@@ -45,7 +47,7 @@ from tests_common.test_utils.otel_utils import (
     extract_spans_from_output,
     get_parent_child_dict,
 )
-from tests_common.test_utils.version_compat import AIRFLOW_V_3_0_PLUS
+from tests_common.test_utils.version_compat import AIRFLOW_V_3_0_PLUS, AIRFLOW_V_3_1_PLUS
 
 log = logging.getLogger("integration.otel.test_otel")
 
@@ -545,14 +547,14 @@ def print_ti_output_for_dag_run(dag_id: str, run_id: str):
         for filename in files:
             if filename.endswith(".log"):
                 full_path = os.path.join(root, filename)
-                log.info("\n===== LOG FILE: %s - START =====\n", full_path)
+                print("\n===== LOG FILE: %s - START =====\n", full_path)
                 try:
                     with open(full_path) as f:
-                        log.info(f.read())
+                        print(f.read())
                 except Exception as e:
                     log.error("Could not read %s: %s", full_path, e)
 
-                log.info("\n===== END =====\n")
+                print("\n===== END =====\n")
 
 
 @pytest.mark.integration("redis")
@@ -646,7 +648,7 @@ class TestOtelIntegration:
         cls.dags = cls.serialize_and_get_dags()
 
     @classmethod
-    def serialize_and_get_dags(cls) -> dict[str, DAG]:
+    def serialize_and_get_dags(cls) -> dict[str, SerializedDAG]:
         log.info("Serializing Dags from directory %s", cls.dag_folder)
         # Load DAGs from the dag directory.
         dag_bag = DagBag(dag_folder=cls.dag_folder, include_examples=False)
@@ -654,14 +656,11 @@ class TestOtelIntegration:
         dag_ids = dag_bag.dag_ids
         assert len(dag_ids) == 3
 
-        dag_dict: dict[str, DAG] = {}
+        dag_dict: dict[str, SerializedDAG] = {}
         with create_session() as session:
             for dag_id in dag_ids:
                 dag = dag_bag.get_dag(dag_id)
-                dag_dict[dag_id] = dag
-
                 assert dag is not None, f"DAG with ID {dag_id} not found."
-
                 # Sync the DAG to the database.
                 if AIRFLOW_V_3_0_PLUS:
                     from airflow.models.dagbundle import DagBundleModel
@@ -669,13 +668,22 @@ class TestOtelIntegration:
                     if session.query(DagBundleModel).filter(DagBundleModel.name == "testing").count() == 0:
                         session.add(DagBundleModel(name="testing"))
                         session.commit()
-                    dag.bulk_write_to_db(
+                    SerializedDAG.bulk_write_to_db(
                         bundle_name="testing", bundle_version=None, dags=[dag], session=session
                     )
+                    dag_dict[dag_id] = SerializedDAG.deserialize_dag(SerializedDAG.serialize_dag(dag))
                 else:
                     dag.sync_to_db(session=session)
+                    dag_dict[dag_id] = dag
                 # Manually serialize the dag and write it to the db to avoid a db error.
-                SerializedDagModel.write_dag(dag, bundle_name="testing", session=session)
+                if AIRFLOW_V_3_1_PLUS:
+                    from airflow.serialization.serialized_objects import LazyDeserializedDAG
+
+                    SerializedDagModel.write_dag(
+                        LazyDeserializedDAG.from_dag(dag), bundle_name="testing", session=session
+                    )
+                else:
+                    SerializedDagModel.write_dag(dag, bundle_name="testing", session=session)
 
             session.commit()
 
@@ -744,13 +752,12 @@ class TestOtelIntegration:
             time.sleep(10)
 
             with create_session() as session:
-                tis: list[TaskInstance] = dag.get_task_instances(session=session)
-
-            for ti in tis:
-                # Skip the span_status check.
-                check_ti_state_and_span_status(
-                    task_id=ti.task_id, run_id=run_id, state=State.SUCCESS, span_status=None
-                )
+                task_ids = session.scalars(select(TaskInstance.task_id).where(TaskInstance.dag_id == dag_id))
+                for task_id in task_ids:
+                    # Skip the span_status check.
+                    check_ti_state_and_span_status(
+                        task_id=task_id, run_id=run_id, state=State.SUCCESS, span_status=None
+                    )
 
             print_ti_output_for_dag_run(dag_id=dag_id, run_id=run_id)
         finally:
@@ -818,12 +825,10 @@ class TestOtelIntegration:
             time.sleep(10)
 
             with create_session() as session:
-                tis: list[TaskInstance] = dag.get_task_instances(session=session)
-
-            for ti in tis:
-                check_ti_state_and_span_status(
-                    task_id=ti.task_id, run_id=run_id, state=State.SUCCESS, span_status=SpanStatus.ENDED
-                )
+                for ti in session.scalars(select(TaskInstance).where(TaskInstance.dag_id == dag.dag_id)):
+                    check_ti_state_and_span_status(
+                        task_id=ti.task_id, run_id=run_id, state=State.SUCCESS, span_status=SpanStatus.ENDED
+                    )
 
             print_ti_output_for_dag_run(dag_id=dag_id, run_id=run_id)
         finally:
@@ -872,6 +877,11 @@ class TestOtelIntegration:
         The scheduler thread will be paused after the first task ends and a new scheduler process
         will handle the rest of the dag processing. The paused thread will be resumed afterwards.
         """
+
+        # For this test, scheduler1 must be idle but still considered healthy by scheduler2.
+        # If scheduler2 marks the job as unhealthy, then it will recreate scheduler1's spans
+        # because it will consider them lost.
+        os.environ["AIRFLOW__SCHEDULER__SCHEDULER_HEALTH_CHECK_THRESHOLD"] = "90"
 
         celery_worker_process = None
         scheduler_process_1 = None
@@ -937,13 +947,12 @@ class TestOtelIntegration:
             with open(self.control_file, "w") as file:
                 file.write("continue")
 
-            # Wait for scheduler2 to be up and running.
-            time.sleep(10)
-
             wait_for_dag_run_and_check_span_status(
                 dag_id=dag_id, run_id=run_id, max_wait_time=120, span_status=SpanStatus.SHOULD_END
             )
 
+            # Stop scheduler2 in case it still has a db lock on the dag_run.
+            scheduler_process_2.terminate()
             scheduler_process_1.send_signal(signal.SIGCONT)
 
             # Wait for the scheduler to start again and continue running.
@@ -959,6 +968,9 @@ class TestOtelIntegration:
                 with create_session() as session:
                     dump_airflow_metadata_db(session)
 
+            # Reset for the rest of the tests.
+            os.environ["AIRFLOW__SCHEDULER__SCHEDULER_HEALTH_CHECK_THRESHOLD"] = "15"
+
             # Terminate the processes.
             celery_worker_process.terminate()
             celery_worker_process.wait()
@@ -969,7 +981,6 @@ class TestOtelIntegration:
             apiserver_process.terminate()
             apiserver_process.wait()
 
-            scheduler_process_2.terminate()
             scheduler_process_2.wait()
 
         out, err = capfd.readouterr()
@@ -991,7 +1002,6 @@ class TestOtelIntegration:
         """
 
         celery_worker_process = None
-        scheduler_process_1 = None
         apiserver_process = None
         scheduler_process_2 = None
         try:
@@ -1032,7 +1042,7 @@ class TestOtelIntegration:
             with capfd.disabled():
                 scheduler_process_1.terminate()
 
-            assert scheduler_process_1.wait(timeout=30) == 0
+            assert scheduler_process_1.wait() == 0
 
             check_dag_run_state_and_span_status(
                 dag_id=dag_id, run_id=run_id, state=State.RUNNING, span_status=SpanStatus.NEEDS_CONTINUANCE
@@ -1049,9 +1059,6 @@ class TestOtelIntegration:
             with open(self.control_file, "w") as file:
                 file.write("continue")
 
-            # Wait for scheduler2 to be up and running.
-            time.sleep(10)
-
             wait_for_dag_run_and_check_span_status(
                 dag_id=dag_id, run_id=run_id, max_wait_time=120, span_status=SpanStatus.ENDED
             )
@@ -1065,8 +1072,6 @@ class TestOtelIntegration:
             # Terminate the processes.
             celery_worker_process.terminate()
             celery_worker_process.wait()
-
-            scheduler_process_1.wait()
 
             apiserver_process.terminate()
             apiserver_process.wait()
@@ -1252,9 +1257,6 @@ class TestOtelIntegration:
                 stdout=None,
                 stderr=None,
             )
-
-            # Wait for scheduler2 to be up and running.
-            time.sleep(10)
 
             wait_for_dag_run_and_check_span_status(
                 dag_id=dag_id, run_id=run_id, max_wait_time=120, span_status=SpanStatus.ENDED

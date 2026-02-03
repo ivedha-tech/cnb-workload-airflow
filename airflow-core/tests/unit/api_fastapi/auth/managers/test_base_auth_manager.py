@@ -249,13 +249,15 @@ class TestBaseAuthManager:
             ([True, True], True),
         ],
     )
-    @patch.object(EmptyAuthManager, "is_authorized_dag")
-    def test_batch_is_authorized_dag(self, mock_is_authorized_dag, auth_manager, return_values, expected):
-        mock_is_authorized_dag.side_effect = return_values
-        result = auth_manager.batch_is_authorized_dag(
+    @patch.object(EmptyAuthManager, "is_authorized_connection")
+    def test_batch_is_authorized_connection(
+        self, mock_is_authorized_connection, auth_manager, return_values, expected
+    ):
+        mock_is_authorized_connection.side_effect = return_values
+        result = auth_manager.batch_is_authorized_connection(
             [
-                {"method": "GET", "details": DagDetails(id="dag1")},
-                {"method": "GET", "details": DagDetails(id="dag2")},
+                {"method": "GET", "details": ConnectionDetails(conn_id="conn1")},
+                {"method": "GET", "details": ConnectionDetails(conn_id="conn2")},
             ],
             user=Mock(),
         )
@@ -269,15 +271,13 @@ class TestBaseAuthManager:
             ([True, True], True),
         ],
     )
-    @patch.object(EmptyAuthManager, "is_authorized_connection")
-    def test_batch_is_authorized_connection(
-        self, mock_is_authorized_connection, auth_manager, return_values, expected
-    ):
-        mock_is_authorized_connection.side_effect = return_values
-        result = auth_manager.batch_is_authorized_connection(
+    @patch.object(EmptyAuthManager, "is_authorized_dag")
+    def test_batch_is_authorized_dag(self, mock_is_authorized_dag, auth_manager, return_values, expected):
+        mock_is_authorized_dag.side_effect = return_values
+        result = auth_manager.batch_is_authorized_dag(
             [
-                {"method": "GET", "details": ConnectionDetails(conn_id="conn1")},
-                {"method": "GET", "details": ConnectionDetails(conn_id="conn2")},
+                {"method": "GET", "details": DagDetails(id="dag1")},
+                {"method": "GET", "details": DagDetails(id="dag2")},
             ],
             user=Mock(),
         )

@@ -31,11 +31,7 @@ from typing_extensions import NotRequired
 
 from airflow.exceptions import AirflowException, AirflowNotFoundException
 from airflow.providers.slack.utils import ConnectionExtraConfig
-
-try:
-    from airflow.sdk import BaseHook
-except ImportError:
-    from airflow.hooks.base import BaseHook  # type: ignore[attr-defined,no-redef]
+from airflow.providers.slack.version_compat import BaseHook
 from airflow.utils.helpers import exactly_one
 
 if TYPE_CHECKING:
@@ -241,7 +237,6 @@ class SlackHook(BaseHook):
         initial_comment: str | None = None,
         title: str | None = None,
         snippet_type: str | None = None,
-        **kwargs,
     ) -> list[SlackResponse]:
         """
         Smooth transition between ``send_file`` and ``send_file_v2`` methods.
@@ -405,7 +400,7 @@ class SlackHook(BaseHook):
                 "password": "Slack API Token",
             },
             "placeholders": {
-                "password": "xoxb-1234567890123-09876543210987-AbCdEfGhIjKlMnOpQrStUvWx",
+                "password": "REPLACE ME WITH A SLACK ACCESS TOKEN",
                 "timeout": "30",
                 "base_url": "https://www.slack.com/api/",
                 "proxy": "http://localhost:9000",

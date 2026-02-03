@@ -27,12 +27,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-from packaging.version import Version, parse as parse_version
-
-import airflow
-from airflow.api_fastapi.auth.managers.simple.openapi import __file__ as sam_openapi_file
-from airflow.api_fastapi.core_api.openapi import __file__ as main_openapi_file
-from airflow.configuration import retrieve_configuration_description
 from docs.utils.conf_constants import (
     AIRFLOW_CORE_DOC_STATIC_PATH,
     AIRFLOW_CORE_DOCKER_COMPOSE_PATH,
@@ -61,6 +55,12 @@ from docs.utils.conf_constants import (
     get_rst_filepath_from_path,
     skip_util_classes_extension,
 )
+from packaging.version import Version, parse as parse_version
+
+import airflow
+from airflow.api_fastapi.auth.managers.simple.openapi import __file__ as sam_openapi_file
+from airflow.api_fastapi.core_api.openapi import __file__ as main_openapi_file
+from airflow.configuration import retrieve_configuration_description
 
 PACKAGE_NAME = "apache-airflow"
 PACKAGE_VERSION = airflow.__version__
@@ -120,7 +120,6 @@ ALLOWED_TOP_LEVEL_FILES = ("exceptions.py",)
 
 PACKAGES_THAT_WE_SHOULD_ADD_TO_API_DOCS = {
     "hooks",
-    "decorators",
     "example_dags",
     "executors",
     "operators",
@@ -140,15 +139,7 @@ UTIL_MODULES_THAT_SHOULD_BE_INCLUDED_IN_API_DOCS: set[str] = {
 
 MODELS_THAT_SHOULD_BE_INCLUDED_IN_API_DOCS: set[str] = {
     "baseoperator.py",
-    "connection.py",
-    "dag.py",
-    "dagrun.py",
-    "dagbag.py",
     "param.py",
-    "taskinstance.py",
-    "taskinstancekey.py",
-    "variable.py",
-    "xcom.py",
 }
 
 

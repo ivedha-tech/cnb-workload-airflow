@@ -34,17 +34,24 @@ from celery.result import AsyncResult
 from kombu.asynchronous import set_event_loop
 
 from airflow.configuration import conf
-from airflow.models.baseoperator import BaseOperator
 from airflow.models.dag import DAG
 from airflow.models.taskinstance import TaskInstance, TaskInstanceKey
 from airflow.providers.celery.executors import celery_executor, celery_executor_utils, default_celery
 from airflow.providers.celery.executors.celery_executor import CeleryExecutor
-from airflow.utils import timezone
 from airflow.utils.state import State
 
 from tests_common.test_utils import db
 from tests_common.test_utils.config import conf_vars
-from tests_common.test_utils.version_compat import AIRFLOW_V_3_0_PLUS
+from tests_common.test_utils.dag import sync_dag_to_db
+from tests_common.test_utils.version_compat import AIRFLOW_V_3_0_PLUS, AIRFLOW_V_3_1_PLUS
+
+if AIRFLOW_V_3_0_PLUS:
+    from airflow.models.dag_version import DagVersion
+if AIRFLOW_V_3_1_PLUS:
+    from airflow.sdk import BaseOperator, timezone
+else:
+    from airflow.models.baseoperator import BaseOperator  # type: ignore[attr-defined,no-redef]
+    from airflow.utils import timezone  # type: ignore[attr-defined,no-redef]
 
 pytestmark = pytest.mark.db_test
 
@@ -189,13 +196,18 @@ class TestCeleryExecutor:
                 ) or mock_fork.call_args == ((command, "abcdef-124215-abcdef"),)
 
     @pytest.mark.backend("mysql", "postgres")
-    def test_try_adopt_task_instances_none(self):
+    def test_try_adopt_task_instances_none(self, clean_dags_dagruns_and_dagbundles, testing_dag_bundle):
         start_date = timezone.utcnow() - timedelta(days=2)
 
-        with DAG("test_try_adopt_task_instances_none", schedule=None):
+        with DAG("test_try_adopt_task_instances_none", schedule=None) as dag:
             task_1 = BaseOperator(task_id="task_1", start_date=start_date)
 
-        key1 = TaskInstance(task=task_1, run_id=None)
+        if AIRFLOW_V_3_0_PLUS:
+            sync_dag_to_db(dag)
+            dag_version = DagVersion.get_latest_version(dag.dag_id)
+            key1 = TaskInstance(task=task_1, run_id=None, dag_version_id=dag_version.id)
+        else:
+            key1 = TaskInstance(task=task_1, run_id=None)
         tis = [key1]
 
         executor = celery_executor.CeleryExecutor()
@@ -204,17 +216,23 @@ class TestCeleryExecutor:
 
     @pytest.mark.backend("mysql", "postgres")
     @time_machine.travel("2020-01-01", tick=False)
-    def test_try_adopt_task_instances(self):
+    def test_try_adopt_task_instances(self, clean_dags_dagruns_and_dagbundles, testing_dag_bundle):
         start_date = timezone.utcnow() - timedelta(days=2)
 
         with DAG("test_try_adopt_task_instances_none", schedule=None) as dag:
             task_1 = BaseOperator(task_id="task_1", start_date=start_date)
             task_2 = BaseOperator(task_id="task_2", start_date=start_date)
 
-        ti1 = TaskInstance(task=task_1, run_id=None)
+        if AIRFLOW_V_3_0_PLUS:
+            sync_dag_to_db(dag)
+            dag_version = DagVersion.get_latest_version(dag.dag_id)
+            ti1 = TaskInstance(task=task_1, run_id=None, dag_version_id=dag_version.id)
+            ti2 = TaskInstance(task=task_2, run_id=None, dag_version_id=dag_version.id)
+        else:
+            ti1 = TaskInstance(task=task_1, run_id=None)
+            ti2 = TaskInstance(task=task_2, run_id=None)
         ti1.external_executor_id = "231"
         ti1.state = State.QUEUED
-        ti2 = TaskInstance(task=task_2, run_id=None)
         ti2.external_executor_id = "232"
         ti2.state = State.QUEUED
 
@@ -241,13 +259,20 @@ class TestCeleryExecutor:
 
     @pytest.mark.backend("mysql", "postgres")
     @mock.patch("airflow.providers.celery.executors.celery_executor.CeleryExecutor.fail")
-    def test_cleanup_stuck_queued_tasks(self, mock_fail):
+    def test_cleanup_stuck_queued_tasks(
+        self, mock_fail, clean_dags_dagruns_and_dagbundles, testing_dag_bundle
+    ):
         start_date = timezone.utcnow() - timedelta(days=2)
 
-        with DAG("test_cleanup_stuck_queued_tasks_failed", schedule=None):
+        with DAG("test_cleanup_stuck_queued_tasks_failed", schedule=None) as dag:
             task = BaseOperator(task_id="task_1", start_date=start_date)
 
-        ti = TaskInstance(task=task, run_id=None)
+        if AIRFLOW_V_3_0_PLUS:
+            sync_dag_to_db(dag)
+            dag_version = DagVersion.get_latest_version(task.dag.dag_id)
+            ti = TaskInstance(task=task, run_id=None, dag_version_id=dag_version.id)
+        else:
+            ti = TaskInstance(task=task, run_id=None)
         ti.external_executor_id = "231"
         ti.state = State.QUEUED
         ti.queued_dttm = timezone.utcnow() - timedelta(minutes=30)
@@ -270,13 +295,18 @@ class TestCeleryExecutor:
 
     @pytest.mark.backend("mysql", "postgres")
     @mock.patch("airflow.providers.celery.executors.celery_executor.CeleryExecutor.fail")
-    def test_revoke_task(self, mock_fail):
+    def test_revoke_task(self, mock_fail, clean_dags_dagruns_and_dagbundles, testing_dag_bundle):
         start_date = timezone.utcnow() - timedelta(days=2)
 
-        with DAG("test_revoke_task", schedule=None):
+        with DAG("test_revoke_task", schedule=None) as dag:
             task = BaseOperator(task_id="task_1", start_date=start_date)
 
-        ti = TaskInstance(task=task, run_id=None)
+        if AIRFLOW_V_3_0_PLUS:
+            sync_dag_to_db(dag)
+            dag_version = DagVersion.get_latest_version(task.dag.dag_id)
+            ti = TaskInstance(task=task, run_id=None, dag_version_id=dag_version.id)
+        else:
+            ti = TaskInstance(task=task, run_id=None)
         ti.external_executor_id = "231"
         ti.state = State.QUEUED
         ti.queued_dttm = timezone.utcnow() - timedelta(minutes=30)

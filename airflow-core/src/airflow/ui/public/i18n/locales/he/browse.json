@@ -10,11 +10,14 @@
       "user": "משתמש",
       "when": "מתי"
     },
+    "filters": {
+      "eventType": "סוג אירוע"
+    },
     "title": "יומן מערכת"
   },
   "xcom": {
     "columns": {
-      "dag": "DAG",
+      "dag": "Dag",
       "key": "מפתח",
       "value": "ערך"
     },

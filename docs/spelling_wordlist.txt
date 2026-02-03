@@ -34,6 +34,7 @@ airbnb
 Airbyte
 airbyte
 AirflowConfigParser
+airflowctl
 AirflowException
 airflowignore
 ajax
@@ -224,6 +225,7 @@ bytestring
 cacert
 Cadwyn
 callables
+callsite
 camelCase
 Cancelled
 cancelled
@@ -529,6 +531,9 @@ Dlp
 dlp
 DlpJob
 DlpServiceClient
+DLQ
+Dlq
+dlq
 dms
 DNs
 dns
@@ -788,6 +793,7 @@ grpc
 GSoD
 gsuite
 Gunicorn
+gunicorn
 gz
 Gzip
 gzipped
@@ -1158,6 +1164,7 @@ mssql
 mTLS
 mtls
 muldelete
+multi-cloud
 multimodal
 Multinamespace
 mutex
@@ -1363,6 +1370,7 @@ prefetched
 prefetches
 preflight
 prefork
+prek
 Preload
 preloading
 prepend
@@ -1502,6 +1510,7 @@ repos
 repr
 req
 reqs
+requeue
 requeued
 Reserialize
 reserialize
@@ -1567,6 +1576,7 @@ sched
 schedulable
 schedulername
 schemas
+scrollbar
 sdk
 sdks
 searchpath
@@ -1707,6 +1717,7 @@ StrictUndefined
 Stringified
 stringified
 Struct
+StructuredLogMessage
 STS
 subchart
 subclassed
@@ -1790,6 +1801,7 @@ TaskInstanceKey
 taskinstancekey
 taskmeta
 taskmixin
+tasksDuration
 tasksetmeta
 tasksState
 taskTree
@@ -1957,6 +1969,7 @@ utilise
 Utils
 utils
 uuid
+uv
 V1JobList
 validator
 validators
@@ -1980,6 +1993,7 @@ views
 virtualenv
 virtualenvs
 virtualized
+Vite
 vm
 VolumeKmsKeyId
 VolumeMount

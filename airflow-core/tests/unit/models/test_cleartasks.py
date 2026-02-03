@@ -23,19 +23,20 @@ import random
 import pytest
 from sqlalchemy import select
 
-from airflow.models.baseoperator import BaseOperator
-from airflow.models.dag import DAG
-from airflow.models.serialized_dag import SerializedDagModel
+from airflow.models.dag_version import DagVersion
+from airflow.models.dagrun import DagRun
 from airflow.models.taskinstance import TaskInstance, TaskInstance as TI, clear_task_instances
 from airflow.models.taskinstancehistory import TaskInstanceHistory
 from airflow.models.taskreschedule import TaskReschedule
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.sensors.python import PythonSensor
+from airflow.serialization.serialized_objects import SerializedDAG
 from airflow.utils.session import create_session
 from airflow.utils.state import DagRunState, State, TaskInstanceState
 from airflow.utils.types import DagRunTriggeredByType, DagRunType
 
 from tests_common.test_utils import db
+from tests_common.test_utils.dag import sync_dag_to_db
 from unit.models import DEFAULT_DATE
 
 pytestmark = [pytest.mark.db_test, pytest.mark.need_serialized_dag]
@@ -45,10 +46,12 @@ class TestClearTasks:
     @pytest.fixture(autouse=True, scope="class")
     def clean(self):
         db.clear_db_runs()
+        db.clear_db_serialized_dags()
 
         yield
 
         db.clear_db_runs()
+        db.clear_db_serialized_dags()
 
     def test_clear_task_instances(self, dag_maker):
         # Explicitly needs catchup as True as test is creating history runs
@@ -327,14 +330,7 @@ class TestClearTasks:
             dag.task_dict.clear()
             dag.task_group.children.clear()
             assert ti1.max_tries == 2
-            SerializedDagModel.write_dag(
-                dag=dag,
-                bundle_name="dag_maker",
-                bundle_version=None,
-                min_update_interval=0,
-                session=session,
-            )
-            session.commit()
+            sync_dag_to_db(dag, session=session)
             session.refresh(ti1)
             assert ti0.try_number == 1
             assert ti0.max_tries == 0
@@ -368,9 +364,6 @@ class TestClearTasks:
         ) as dag:
             task0 = EmptyOperator(task_id="task0")
             task1 = EmptyOperator(task_id="task1", retries=2)
-
-        # Write DAG to the database so it can be found by clear_task_instances().
-        SerializedDagModel.write_dag(dag, bundle_name="testing", session=session)
 
         dr = dag_maker.create_dagrun(
             state=State.RUNNING,
@@ -631,7 +624,7 @@ class TestClearTasks:
                 )
             )
 
-        DAG.clear_dags(dags)
+        SerializedDAG.clear_dags(dags)
         session.commit()
         for i in range(num_of_dags):
             ti = _get_ti(tis[i])
@@ -640,17 +633,17 @@ class TestClearTasks:
             assert ti.max_tries == 1
 
         # test dry_run
-        for i in range(num_of_dags):
+        for i, dag in enumerate(dags):
             ti = _get_ti(tis[i])
             ti.try_number += 1
             session.commit()
-            ti.refresh_from_task(tis[i].task)
+            ti.refresh_from_task(dag.get_task(ti.task_id))
             ti.run(session=session)
             assert ti.state == State.SUCCESS
             assert ti.try_number == 2
             assert ti.max_tries == 1
         session.commit()
-        DAG.clear_dags(dags, dry_run=True)
+        SerializedDAG.clear_dags(dags, dry_run=True)
         session.commit()
         for i in range(num_of_dags):
             ti = _get_ti(tis[i])
@@ -664,7 +657,7 @@ class TestClearTasks:
         ti_fail.state = State.FAILED
         session.commit()
 
-        DAG.clear_dags(dags, only_failed=True)
+        SerializedDAG.clear_dags(dags, only_failed=True)
 
         for ti in tis:
             ti = _get_ti(ti)
@@ -677,66 +670,58 @@ class TestClearTasks:
                 assert ti.try_number == 2
                 assert ti.max_tries == 1
 
-    def test_operator_clear(self, dag_maker, session):
-        class ClearOperator(BaseOperator):
-            def execute(self, context):
-                pass
-
-        with dag_maker("test_operator_clear"):
-            op1 = ClearOperator(task_id="test1")
-            op2 = ClearOperator(task_id="test2", retries=1)
-            op1 >> op2
-
+    @pytest.mark.parametrize("run_on_latest_version", [True, False])
+    def test_clear_task_instances_with_run_on_latest_version(self, run_on_latest_version, dag_maker, session):
+        # Explicitly needs catchup as True as test is creating history runs
+        with dag_maker(
+            "test_clear_task_instances",
+            start_date=DEFAULT_DATE,
+            end_date=DEFAULT_DATE + datetime.timedelta(days=10),
+            catchup=True,
+            bundle_version="v1",
+        ):
+            task0 = EmptyOperator(task_id="0")
+            task1 = EmptyOperator(task_id="1", retries=2)
         dr = dag_maker.create_dagrun(
             state=State.RUNNING,
             run_type=DagRunType.SCHEDULED,
         )
 
-        def _get_ti(old_ti):
-            return session.scalar(
-                select(TI).where(
-                    TI.dag_id == old_ti.dag_id,
-                    TI.task_id == old_ti.task_id,
-                    TI.map_index == old_ti.map_index,
-                    TI.run_id == old_ti.run_id,
-                )
-            )
+        old_dag_version = DagVersion.get_latest_version(dr.dag_id)
+        ti0, ti1 = sorted(dr.task_instances, key=lambda ti: ti.task_id)
+        ti0.refresh_from_task(task0)
+        ti1.refresh_from_task(task1)
 
-        ti1, ti2 = sorted(dr.get_task_instances(session=session), key=lambda ti: ti.task_id)
-        ti1.task = op1
-        ti2.task = op2
-        ti2.refresh_from_db(session=session)
-        ti2.try_number += 1
+        ti0.run()
+        ti1.run()
+        dr.state = DagRunState.SUCCESS
+        session.merge(dr)
+        session.flush()
+
+        with dag_maker(
+            "test_clear_task_instances",
+            start_date=DEFAULT_DATE,
+            end_date=DEFAULT_DATE + datetime.timedelta(days=10),
+            catchup=True,
+            bundle_version="v2",
+        ) as dag:
+            EmptyOperator(task_id="0")
+        new_dag_version = DagVersion.get_latest_version(dag.dag_id)
+
+        assert old_dag_version.id != new_dag_version.id
+        qry = session.query(TI).filter(TI.dag_id == dag.dag_id).order_by(TI.task_id).all()
+        clear_task_instances(qry, session, run_on_latest_version=run_on_latest_version)
         session.commit()
-
-        # Dependency not met
-        assert ti2.try_number == 1
-        assert ti2.max_tries == 1
-
-        ti1.refresh_from_db(session=session)
-        assert ti1.max_tries == 0
-        assert ti1.try_number == 0
-
-        op2.clear(upstream=True, session=session)
-        ti1.refresh_from_db(session)
-        ti2.refresh_from_db(session)
-        ti1.task = op1
-        ti2.task = op2
-        # max tries will be set to retries + curr try number == 1 + 1 == 2
-        assert ti2.max_tries == 2
-
-        ti1.refresh_from_db(session)
-        ti2.refresh_from_db(session)
-        assert ti1.try_number == 0
-
-        ti2 = _get_ti(ti2)
-        ti2.try_number += 1
-        ti2.refresh_from_task(op1)
-        session.commit()
-        ti2.run(ignore_ti_state=True, session=session)
-        ti2.refresh_from_db(session)
-        # max_tries is 0 because there is no task instance in db for ti1
-        # so clear won't change the max_tries.
-        assert ti1.max_tries == 0
-        assert ti2.try_number == 2
-        assert ti2.max_tries == 2  # max tries has not changed since it was updated when op2.clear called
+        dr = session.query(DagRun).filter(DagRun.dag_id == dag.dag_id).one()
+        if run_on_latest_version:
+            assert dr.created_dag_version_id == new_dag_version.id
+            assert dr.bundle_version == new_dag_version.bundle_version
+            assert TaskInstanceState.REMOVED in [ti.state for ti in dr.task_instances]
+            for ti in dr.task_instances:
+                assert ti.dag_version_id == new_dag_version.id
+        else:
+            assert dr.created_dag_version_id == old_dag_version.id
+            assert dr.bundle_version == old_dag_version.bundle_version
+            assert TaskInstanceState.REMOVED not in [ti.state for ti in dr.task_instances]
+            for ti in dr.task_instances:
+                assert ti.dag_version_id == old_dag_version.id

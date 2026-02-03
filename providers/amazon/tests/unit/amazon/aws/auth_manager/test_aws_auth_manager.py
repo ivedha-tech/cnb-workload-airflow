@@ -368,37 +368,6 @@ class TestAwsAuthManager:
         )
         assert result
 
-    @patch.object(AwsAuthManager, "avp_facade")
-    def test_batch_is_authorized_connection(
-        self,
-        mock_avp_facade,
-        auth_manager,
-    ):
-        batch_is_authorized = Mock(return_value=True)
-        mock_avp_facade.batch_is_authorized = batch_is_authorized
-
-        result = auth_manager.batch_is_authorized_connection(
-            requests=[{"method": "GET"}, {"method": "GET", "details": ConnectionDetails(conn_id="conn_id")}],
-            user=mock,
-        )
-
-        batch_is_authorized.assert_called_once_with(
-            requests=[
-                {
-                    "method": "GET",
-                    "entity_type": AvpEntities.CONNECTION,
-                    "entity_id": None,
-                },
-                {
-                    "method": "GET",
-                    "entity_type": AvpEntities.CONNECTION,
-                    "entity_id": "conn_id",
-                },
-            ],
-            user=ANY,
-        )
-        assert result
-
     def test_filter_authorized_menu_items(self, auth_manager):
         batch_is_authorized_output = [
             {
@@ -469,6 +438,40 @@ class TestAwsAuthManager:
             user=ANY,
         )
         assert result == [MenuItem.VARIABLES, MenuItem.DAGS]
+
+    @patch.object(AwsAuthManager, "avp_facade")
+    def test_batch_is_authorized_connection(
+        self,
+        mock_avp_facade,
+        auth_manager,
+    ):
+        batch_is_authorized = Mock(return_value=True)
+        mock_avp_facade.batch_is_authorized = batch_is_authorized
+
+        result = auth_manager.batch_is_authorized_connection(
+            requests=[
+                {"method": "GET"},
+                {"method": "PUT", "details": ConnectionDetails(conn_id="test")},
+            ],
+            user=mock,
+        )
+
+        batch_is_authorized.assert_called_once_with(
+            requests=[
+                {
+                    "method": "GET",
+                    "entity_type": AvpEntities.CONNECTION,
+                    "entity_id": None,
+                },
+                {
+                    "method": "PUT",
+                    "entity_type": AvpEntities.CONNECTION,
+                    "entity_id": "test",
+                },
+            ],
+            user=ANY,
+        )
+        assert result
 
     @patch.object(AwsAuthManager, "avp_facade")
     def test_batch_is_authorized_dag(
@@ -551,7 +554,10 @@ class TestAwsAuthManager:
         mock_avp_facade.batch_is_authorized = batch_is_authorized
 
         result = auth_manager.batch_is_authorized_pool(
-            requests=[{"method": "GET"}, {"method": "GET", "details": PoolDetails(name="pool1")}],
+            requests=[
+                {"method": "GET"},
+                {"method": "PUT", "details": PoolDetails(name="test")},
+            ],
             user=mock,
         )
 
@@ -563,9 +569,9 @@ class TestAwsAuthManager:
                     "entity_id": None,
                 },
                 {
-                    "method": "GET",
+                    "method": "PUT",
                     "entity_type": AvpEntities.POOL,
-                    "entity_id": "pool1",
+                    "entity_id": "test",
                 },
             ],
             user=ANY,
@@ -582,7 +588,10 @@ class TestAwsAuthManager:
         mock_avp_facade.batch_is_authorized = batch_is_authorized
 
         result = auth_manager.batch_is_authorized_variable(
-            requests=[{"method": "GET"}, {"method": "GET", "details": VariableDetails(key="var1")}],
+            requests=[
+                {"method": "GET"},
+                {"method": "PUT", "details": VariableDetails(key="test")},
+            ],
             user=mock,
         )
 
@@ -594,9 +603,9 @@ class TestAwsAuthManager:
                     "entity_id": None,
                 },
                 {
-                    "method": "GET",
+                    "method": "PUT",
                     "entity_type": AvpEntities.VARIABLE,
-                    "entity_id": "var1",
+                    "entity_id": "test",
                 },
             ],
             user=ANY,

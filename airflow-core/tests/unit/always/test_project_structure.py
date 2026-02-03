@@ -66,7 +66,6 @@ class TestProjectStructure:
             "providers/amazon/tests/unit/amazon/aws/executors/batch/test_batch_executor_config.py",
             "providers/amazon/tests/unit/amazon/aws/executors/batch/test_boto_schema.py",
             "providers/amazon/tests/unit/amazon/aws/executors/batch/test_utils.py",
-            "providers/amazon/tests/unit/amazon/aws/executors/ecs/test_boto_schema.py",
             "providers/amazon/tests/unit/amazon/aws/executors/ecs/test_ecs_executor_config.py",
             "providers/amazon/tests/unit/amazon/aws/executors/ecs/test_utils.py",
             "providers/amazon/tests/unit/amazon/aws/executors/aws_lambda/test_utils.py",
@@ -117,6 +116,7 @@ class TestProjectStructure:
             "providers/edge3/tests/unit/edge3/worker_api/test_app.py",
             "providers/edge3/tests/unit/edge3/worker_api/test_auth.py",
             "providers/edge3/tests/unit/edge3/worker_api/test_datamodels.py",
+            "providers/edge3/tests/unit/edge3/worker_api/test_datamodels_ui.py",
             "providers/fab/tests/unit/fab/auth_manager/api_fastapi/datamodels/test_login.py",
             "providers/fab/tests/unit/fab/migrations/test_env.py",
             "providers/fab/tests/unit/fab/www/api_connexion/test_exceptions.py",
@@ -161,7 +161,6 @@ class TestProjectStructure:
             "providers/google/tests/unit/google/cloud/links/test_dataproc.py",
             "providers/google/tests/unit/google/cloud/links/test_datastore.py",
             "providers/google/tests/unit/google/cloud/links/test_kubernetes_engine.py",
-            "providers/google/tests/unit/google/cloud/links/test_life_sciences.py",
             "providers/google/tests/unit/google/cloud/links/test_mlengine.py",
             "providers/google/tests/unit/google/cloud/links/test_pubsub.py",
             "providers/google/tests/unit/google/cloud/links/test_spanner.py",
@@ -198,6 +197,7 @@ class TestProjectStructure:
             "providers/standard/tests/unit/standard/sensors/test_external_task.py",
             "providers/standard/tests/unit/standard/sensors/test_filesystem.py",
             "providers/standard/tests/unit/standard/utils/test_sensor_helper.py",
+            "providers/sftp/tests/unit/sftp/test_exceptions.py",
         ]
         modules_files: list[pathlib.Path] = list(
             AIRFLOW_PROVIDERS_ROOT_PATH.glob("**/src/airflow/providers/**/*.py")
@@ -446,8 +446,11 @@ class TestGoogleProviderProjectStructure(ExampleCoverageTest, AssetsCoverageTest
         "airflow.providers.google.cloud.operators.mlengine.MLEngineCreateModelOperator",
         "airflow.providers.google.cloud.operators.vertex_ai.generative_model.TextGenerationModelPredictOperator",
         "airflow.providers.google.marketing_platform.operators.GoogleDisplayVideo360CreateQueryOperator",
+        "airflow.providers.google.marketing_platform.operators.GoogleDisplayVideo360DeleteReportOperator",
         "airflow.providers.google.marketing_platform.operators.GoogleDisplayVideo360RunQueryOperator",
         "airflow.providers.google.marketing_platform.operators.GoogleDisplayVideo360DownloadReportV2Operator",
+        "airflow.providers.google.marketing_platform.operators.GoogleDisplayVideo360UploadLineItemsOperator",
+        "airflow.providers.google.marketing_platform.operators.GoogleDisplayVideo360DownloadLineItemsOperator",
         "airflow.providers.google.marketing_platform.sensors.GoogleDisplayVideo360RunQuerySensor",
         "airflow.providers.google.cloud.hooks.datacatalog.CloudDataCatalogHook",
         "airflow.providers.google.cloud.links.datacatalog.DataCatalogEntryGroupLink",
@@ -493,7 +496,6 @@ class TestGoogleProviderProjectStructure(ExampleCoverageTest, AssetsCoverageTest
     }
 
     MISSING_EXAMPLES_FOR_CLASSES = {
-        "airflow.providers.google.cloud.operators.life_sciences.LifeSciencesRunPipelineOperator",
         "airflow.providers.google.cloud.operators.dlp.CloudDLPRedactImageOperator",
         "airflow.providers.google.cloud.transfers.cassandra_to_gcs.CassandraToGCSOperator",
         "airflow.providers.google.cloud.transfers.adls_to_gcs.ADLSToGCSOperator",
@@ -503,6 +505,14 @@ class TestGoogleProviderProjectStructure(ExampleCoverageTest, AssetsCoverageTest
         "airflow.providers.google.cloud.operators.vertex_ai.endpoint_service.UpdateEndpointOperator",
         "airflow.providers.google.cloud.operators.vertex_ai.batch_prediction_job.GetBatchPredictionJobOperator",
         "airflow.providers.google.cloud.operators.datacatalog.CloudDataCatalogDeleteEntryOperator",
+        "airflow.providers.google.marketing_platform.operators.display_video.GoogleDisplayVideo360CreateQueryOperator",
+        "airflow.providers.google.marketing_platform.operators.display_video.GoogleDisplayVideo360RunQueryOperator",
+        "airflow.providers.google.marketing_platform.operators.display_video.GoogleDisplayVideo360DeleteReportOperator",
+        "airflow.providers.google.marketing_platform.operators.display_video.GoogleDisplayVideo360DownloadReportV2Operator",
+        "airflow.providers.google.marketing_platform.operators.display_video.GoogleDisplayVideo360DownloadLineItemsOperator",
+        "airflow.providers.google.marketing_platform.operators.display_video.GoogleDisplayVideo360UploadLineItemsOperator",
+        "airflow.providers.google.marketing_platform.sensors.display_video.GoogleDisplayVideo360RunQuerySensor",
+        "airflow.providers.google.cloud.operators.vertex_ai.generative_model.DeleteExperimentRunOperator",
     }
 
     ASSETS_NOT_REQUIRED = {

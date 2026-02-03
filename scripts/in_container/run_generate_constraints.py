@@ -362,7 +362,14 @@ def generate_constraints_pypi_providers(config_params: ConfigParams) -> None:
     #
     # * no exclusions
     #
-    additional_constraints_for_highest_resolution: list[str] = []
+    # https://github.com/alisaifee/flask-limiter/issues/479
+    additional_constraints_for_highest_resolution: list[str] = [
+        "google-ads!=28.0.0.post2",
+        "Flask-Limiter!=3.13",
+        # https://github.com/pallets/click/issues/3071 causing celery worker failure
+        # https://github.com/apache/airflow/commit/0560dccf0300069b660a801965b130dd2cd1e857
+        "click!=8.3.0",
+    ]
 
     result = run_command(
         cmd=[
@@ -370,6 +377,8 @@ def generate_constraints_pypi_providers(config_params: ConfigParams) -> None:
             "pip",
             "install",
             "--no-sources",
+            "--exact",
+            "--strict",
             "apache-airflow[all]",
             "apache-airflow-core[all]",
             "apache-airflow-task-sdk",

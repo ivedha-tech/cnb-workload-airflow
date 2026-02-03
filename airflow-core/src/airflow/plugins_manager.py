@@ -133,7 +133,7 @@ class EntryPointSource(AirflowPluginSource):
     """Class used to define Plugins loaded from entrypoint."""
 
     def __init__(self, entrypoint: metadata.EntryPoint, dist: metadata.Distribution):
-        self.dist = dist.metadata["Name"]
+        self.dist = dist.metadata["Name"]  # type: ignore[index]
         self.version = dist.version
         self.entrypoint = str(entrypoint)
 
@@ -387,12 +387,71 @@ def initialize_ui_plugins():
 
     log.debug("Initialize UI plugin")
 
+    seen_url_route = {}
     external_views = []
     react_apps = []
 
+    def _remove_list_item(lst, item):
+        # Mutate in place the plugin's external views and react apps list to remove the invalid items
+        # because some function still access these plugin's attribute and not the
+        # global variables `external_views` `react_apps`. (get_plugin_info, for example)
+        lst.remove(item)
+
     for plugin in plugins:
-        external_views.extend(plugin.external_views)
-        react_apps.extend(plugin.react_apps)
+        external_views_to_remove = []
+        react_apps_to_remove = []
+        for external_view in plugin.external_views:
+            if not isinstance(external_view, dict):
+                log.warning(
+                    "Plugin '%s' has an external view that is not a dictionary. The view will not be loaded.",
+                    plugin.name,
+                )
+                external_views_to_remove.append(external_view)
+                continue
+            url_route = external_view.get("url_route")
+            if url_route is None:
+                continue
+            if url_route in seen_url_route:
+                log.warning(
+                    "Plugin '%s' has an external view with an URL route '%s' "
+                    "that conflicts with another plugin '%s'. The view will not be loaded.",
+                    plugin.name,
+                    url_route,
+                    seen_url_route[url_route],
+                )
+                external_views_to_remove.append(external_view)
+                continue
+            external_views.append(external_view)
+            seen_url_route[url_route] = plugin.name
+
+        for react_app in plugin.react_apps:
+            if not isinstance(react_app, dict):
+                log.warning(
+                    "Plugin '%s' has a React App that is not a dictionary. The React App will not be loaded.",
+                    plugin.name,
+                )
+                react_apps_to_remove.append(react_app)
+                continue
+            url_route = react_app.get("url_route")
+            if url_route is None:
+                continue
+            if url_route in seen_url_route:
+                log.warning(
+                    "Plugin '%s' has a React App with an URL route '%s' "
+                    "that conflicts with another plugin '%s'. The React App will not be loaded.",
+                    plugin.name,
+                    url_route,
+                    seen_url_route[url_route],
+                )
+                react_apps_to_remove.append(react_app)
+                continue
+            react_apps.append(react_app)
+            seen_url_route[url_route] = plugin.name
+
+        for item in external_views_to_remove:
+            _remove_list_item(plugin.external_views, item)
+        for item in react_apps_to_remove:
+            _remove_list_item(plugin.react_apps, item)
 
 
 def initialize_flask_plugins():
